@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026년 12월 약속잡기</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Sans KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: #f8fafc;
+        }
+        /* 부드러운 팝업 애니메이션 */
+        @keyframes popIn {
+            0% { transform: scale(0.94); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        /* 스크롤바 스타일링 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-800 antialiased selection:bg-indigo-100 selection:text-indigo-700">
+
+    <!-- 상단 헤더 -->
+    <header class="bg-white/95 backdrop-blur-md border-b border-slate-200/70 sticky top-0 z-30">
+        <div class="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+            <!-- 좌측 로고 & 타이틀 -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white font-extrabold text-base flex items-center justify-center shadow-sm shadow-indigo-200 shrink-0">
+                    12
+                </div>
+                <div>
+                    <p class="text-[10px] font-bold tracking-wider text-indigo-600 uppercase leading-none mb-1">2026 DECEMBER</p>
+                    <h1 class="text-base sm:text-lg font-extrabold text-slate-900 leading-none">연말 약속잡기</h1>
+                </div>
+            </div>
+
+            <!-- 우측 액션 버튼 (+ 새 모임, 공유 링크 복사) -->
+            <div class="flex items-center gap-2">
+                <button id="btn-new-room" type="button" class="px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-600 bg-white hover:bg-slate-50 border border-slate-200/80 active:scale-95 rounded-xl transition flex items-center gap-1.5" title="새로운 약속 방 만들기">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>새 모임</span>
+                </button>
+                <button id="btn-copy-link" type="button" class="px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 rounded-xl shadow-sm shadow-indigo-200 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-link text-xs"></i>
+                    <span>공유 링크 복사</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 알림 토스트 (alert 대체용) -->
+    <div id="toast-container" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none w-11/12 max-w-md"></div>
+
+    <!-- 메인 컨테이너 -->
+    <main class="flex-1 max-w-5xl w-full mx-auto px-4 py-6 space-y-5">
+
+        <!-- 1. 약속 제목 카드 + 상태 배지 -->
+        <section class="bg-white rounded-2xl p-5 sm:px-6 sm:py-5 shadow-xs border border-slate-200/70">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                    <label for="event-title-input" class="block text-xs font-semibold text-slate-400 mb-1">약속 제목 (클릭하여 수정 가능)</label>
+                    <div class="relative flex items-center">
+                        <input type="text" id="event-title-input" placeholder="예: 2026년 12월 모임 약속 잡기"
+                               class="w-full text-xl sm:text-2xl font-extrabold text-slate-900 bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-indigo-500 focus:outline-none py-0.5 pr-8 transition truncate"
+                               value="2026년 12월 모임 약속 잡기">
+                        <i class="fa-solid fa-pen text-slate-300 text-sm absolute right-2 pointer-events-none"></i>
+                    </div>
+                </div>
+
+                <!-- 상태 배지 (링크 자동 저장 | 방 코드) -->
+                <div class="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/80 self-start sm:self-center font-medium shrink-0">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>링크 자동 저장</span>
+                    <span class="text-slate-300">|</span>
+                    <span class="font-mono font-bold text-slate-700" id="room-id-display">방 코드: -</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 최적의 추천 날짜 배너 (보라색 그라데이션 & 트로피 아이콘) -->
+        <section class="rounded-2xl p-5 sm:px-6 sm:py-5 bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 text-white shadow-md shadow-indigo-200/60">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-xs border border-white/20 flex items-center justify-center shrink-0 text-xl shadow-inner">
+                        🏆
+                    </div>
+                    <div>
+                        <span class="inline-block px-2.5 py-0.5 rounded-full bg-white/20 text-[11px] font-bold tracking-wide mb-1.5">
+                            최적의 추천 날짜
+                        </span>
+                        <h2 id="best-day-text" class="text-base sm:text-xl font-extrabold tracking-tight leading-snug">
+                            아직 등록된 일정이 없습니다. 달력에 O 표시를 남겨보세요!
+                        </h2>
+                    </div>
+                </div>
+                <div id="best-day-meta" class="hidden sm:flex flex-col items-end shrink-0">
+                    <span id="best-day-count" class="px-3 py-1 rounded-full bg-white text-indigo-700 text-xs font-extrabold shadow-xs">0명 가능</span>
+                    <p id="best-day-avatars" class="text-xs text-indigo-100 mt-1.5 max-w-[240px] truncate"></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. 메인 2단 그리드: 좌측 12월 달력 / 우측 등록 폼 & 참여자 현황 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- 좌측: 2026년 12월 달력 (7컬럼) -->
+            <section class="lg:col-span-7 bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200/70">
+                <!-- 달력 헤더 -->
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-5">
+                    <div class="flex items-center gap-2.5">
+                        <h3 class="text-lg sm:text-xl font-extrabold text-slate-900">2026년 12월</h3>
+                        <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-[11px] font-semibold">
+                            날짜를 터치해 O 표시
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-3 text-xs font-medium text-slate-500">
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-3.5 h-3.5 rounded-full border-2 border-indigo-600 inline-block"></span>
+                            내 선택
+                        </span>
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-3.5 h-3.5 rounded-md bg-emerald-50 border border-emerald-400 inline-block"></span>
+                            인기 날짜
+                        </span>
+                    </div>
+                </div>
+
+                <!-- 요일 헤더 (일 ~ 토) -->
+                <div class="grid grid-cols-7 gap-1.5 sm:gap-2 text-center text-xs font-bold mb-2">
+                    <div class="text-rose-500 py-1">일</div>
+                    <div class="text-slate-500 py-1">월</div>
+                    <div class="text-slate-500 py-1">화</div>
+                    <div class="text-slate-500 py-1">수</div>
+                    <div class="text-slate-500 py-1">목</div>
+                    <div class="text-slate-500 py-1">금</div>
+                    <div class="text-blue-600 py-1">토</div>
+                </div>
+
+                <!-- 날짜 그리드 (JS 렌더링) -->
+                <div id="calendar-grid" class="grid grid-cols-7 gap-1.5 sm:gap-2"></div>
+            </section>
+
+            <!-- 우측: 내 가능 날짜 등록하기 + 참여자 현황 (5컬럼) -->
+            <div class="lg:col-span-5 space-y-5">
+
+                <!-- 3-1. 내 가능 날짜 등록하기 카드 -->
+                <section class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200/70">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 font-extrabold text-sm flex items-center justify-center border border-indigo-100">
+                                O
+                            </span>
+                            <h3 id="form-mode-title" class="text-base sm:text-lg font-extrabold text-slate-900">내 가능 날짜 등록하기</h3>
+                        </div>
+                        <button type="button" id="btn-cancel-edit" class="hidden text-xs font-semibold text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition">
+                            수정 취소
+                        </button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <!-- 이름 입력 -->
+                        <div>
+                            <label for="participant-name" class="block text-xs font-bold text-slate-700 mb-1.5">이름 (닉네임)</label>
+                            <input type="text" id="participant-name" maxlength="20" placeholder="이름을 입력하세요 (예: 김철수)"
+                                   class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 focus:outline-none transition placeholder:text-slate-400">
+                        </div>
+
+                        <!-- 선택한 날짜 요약 박스 -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <span class="text-xs font-bold text-slate-700">
+                                    달력에서 선택한 날짜 (<span id="selected-count-summary" class="text-indigo-600">0</span>개)
+                                </span>
+                                <button type="button" id="btn-clear-my-selection" class="hidden text-[11px] font-semibold text-slate-400 hover:text-rose-500 transition">
+                                    선택 초기화
+                                </button>
+                            </div>
+                            <div id="my-selected-pills" class="min-h-[44px] px-3.5 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                                왼쪽 달력에서 가능한 날짜를 클릭해 O 표시를 해주세요.
+                            </div>
+                        </div>
+
+                        <!-- 등록하기 버튼 -->
+                        <button type="button" id="btn-submit-vote" class="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-bold rounded-xl shadow-sm shadow-indigo-200 transition flex items-center justify-center gap-2 text-sm">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <span id="btn-submit-text">등록하기</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 3-2. 참여자 현황 카드 -->
+                <section class="bg-white rounded-2xl p-5 sm:p-6 shadow-xs border border-slate-200/70">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-user-group text-indigo-600 text-sm"></i>
+                            <h3 class="text-base sm:text-lg font-extrabold text-slate-900">참여자 현황</h3>
+                            <span id="total-participants-badge" class="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-xs font-bold">0명</span>
+                        </div>
+                    </div>
+
+                    <div id="participants-list" class="space-y-2.5 max-h-[340px] overflow-y-auto pr-0.5">
+                        <!-- 참여자 목록 또는 빈 상태 렌더링 -->
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- ========================================== -->
+    <!-- 모달 1: 날짜별 상세 참여자 명단 모달 -->
+    <!-- ========================================== -->
+    <div id="day-detail-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-xl border border-slate-100 animate-pop">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h4 id="modal-day-title" class="text-base font-extrabold text-slate-900">12월 1일 (화) 가능 인원</h4>
+                <button type="button" id="btn-close-day-modal" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="modal-day-list" class="py-4 max-h-60 overflow-y-auto space-y-2 text-sm"></div>
+            <div class="pt-2 border-t border-slate-100 flex justify-end">
+                <button type="button" id="btn-toggle-from-modal" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition">
+                    이 날짜 내 선택에 O 표시하기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 모달 2: 공유 링크 확인 및 복사 모달 -->
+    <!-- ========================================== -->
+    <div id="share-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-xl border border-slate-100 animate-pop">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h4 class="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-share-nodes text-indigo-600"></i>
+                    <span id="share-modal-title">공유 링크가 복사되었습니다!</span>
+                </h4>
+                <button type="button" id="btn-close-share-modal" class="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-400 flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="py-4 space-y-3">
+                <p class="text-xs text-slate-600 leading-relaxed bg-indigo-50/70 border border-indigo-100 rounded-xl p-3">
+                    아래 링크를 복사해 단톡방에 공유하세요! 다른 사람이 투표 후 새 링크를 공유하면 결과가 계속 누적됩니다.
+                </p>
+                <div class="flex items-center gap-2">
+                    <input type="text" id="share-url-input" readonly
+                           class="flex-1 px-3 py-2.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:outline-none select-all">
+                    <button type="button" id="btn-modal-copy-url" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shrink-0 transition">
+                        복사
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 모달 3: 새 모임 확인 모달 -->
+    <!-- ========================================== -->
+    <div id="reset-room-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-xs w-full p-5 shadow-xl border border-slate-100 animate-pop text-center">
+            <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 text-xl">
+                <i class="fa-solid fa-calendar-plus"></i>
+            </div>
+            <h4 class="text-base font-extrabold text-slate-900 mb-1">새 모임 방을 만들까요?</h4>
+            <p class="text-xs text-slate-500 mb-4 leading-relaxed">새로운 방 코드가 생성되며 깨끗한 12월 달력으로 시작합니다.</p>
+            <div class="flex gap-2">
+                <button type="button" id="btn-cancel-reset-room" class="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">취소</button>
+                <button type="button" id="btn-confirm-reset-room" class="flex-1 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition">새 모임 만들기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 모달 4: 참여자 삭제 확인 모달 -->
+    <!-- ========================================== -->
+    <div id="delete-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-xs w-full p-5 shadow-xl border border-slate-100 animate-pop text-center">
+            <div class="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3 text-xl">
+                <i class="fa-solid fa-trash-can"></i>
+            </div>
+            <h4 class="text-base font-extrabold text-slate-900 mb-1">응답을 삭제할까요?</h4>
+            <p id="delete-modal-desc" class="text-xs text-slate-500 mb-4 leading-relaxed">선택한 참여자의 일정이 삭제됩니다.</p>
+            <div class="flex gap-2">
+                <button type="button" id="btn-cancel-delete" class="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-600 hover:bg-slate-200 transition">취소</button>
+                <button type="button" id="btn-confirm-delete" class="flex-1 py-2.5 rounded-xl text-xs font-bold bg-rose-600 text-white hover:bg-rose-700 transition">삭제하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            // ==========================================
+            // 1. 상수 및 상태 변수
+            // ==========================================
+            const STORAGE_PREFIX = 'dec2026_ghpages_room_';
+            const DEFAULT_TITLE = '2026년 12월 모임 약속 잡기';
+
+            // 2026년 12월: 12월 1일 = 화요일 (일=0, 월=1, 화=2), 총 31일
+            const FIRST_DAY_OF_WEEK = 2;
+            const DAYS_IN_MONTH = 31;
+            const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+
+            let roomCode = '';
+            let eventTitle = DEFAULT_TITLE;
+            let participants = []; // [{ id, name, dates: number[] }]
+            let mySelectedDates = new Set();
+            let editingParticipantId = null;
+            let pendingDeleteId = null;
+            let activeModalDay = null;
+            let titleDebounceTimer = null;
+
+            // ==========================================
+            // 2. DOM 요소 참조
+            // ==========================================
+            const calendarGrid = document.getElementById('calendar-grid');
+            const eventTitleInput = document.getElementById('event-title-input');
+            const participantNameInput = document.getElementById('participant-name');
+            const mySelectedPills = document.getElementById('my-selected-pills');
+            const selectedCountSummary = document.getElementById('selected-count-summary');
+            const btnSubmitVote = document.getElementById('btn-submit-vote');
+            const btnSubmitText = document.getElementById('btn-submit-text');
+            const formModeTitle = document.getElementById('form-mode-title');
+            const btnCancelEdit = document.getElementById('btn-cancel-edit');
+            const btnClearMySelection = document.getElementById('btn-clear-my-selection');
+            const participantsList = document.getElementById('participants-list');
+            const totalParticipantsBadge = document.getElementById('total-participants-badge');
+            const bestDayText = document.getElementById('best-day-text');
+            const bestDayMeta = document.getElementById('best-day-meta');
+            const bestDayCount = document.getElementById('best-day-count');
+            const bestDayAvatars = document.getElementById('best-day-avatars');
+            const roomIdDisplay = document.getElementById('room-id-display');
+
+            // ==========================================
+            // 3. UTF-8 안전 Base64 압축 인코딩/디코딩 & URL 해시 상태 동기화
+            // ==========================================
+            function encodeStateToBase64(stateObj) {
+                try {
+                    // URL 길이를 최소화하기 위해 축약 키 사용 (c: roomCode, t: title, p: participants)
+                    const compact = {
+                        c: stateObj.roomCode,
+                        t: stateObj.title,
+                        p: stateObj.participants.map(item => [
+                            item.id,
+                            item.name,
+                            item.dates
+                        ])
+                    };
+                    const jsonStr = JSON.stringify(compact);
+                    const utf8Bytes = encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) =>
+                        String.fromCharCode(parseInt(p1, 16))
+                    );
+                    return btoa(utf8Bytes);
+                } catch (e) {
+                    console.error('상태 인코딩 실패:', e);
+                    return '';
+                }
+            }
+
+            function decodeStateFromBase64(encodedStr) {
+                try {
+                    const binaryStr = atob(encodedStr);
+                    const percentEncoded = Array.from(binaryStr).map(ch =>
+                        '%' + ('00' + ch.charCodeAt(0).toString(16)).slice(-2)
+                    ).join('');
+                    const jsonStr = decodeURIComponent(percentEncoded);
+                    const parsed = JSON.parse(jsonStr);
+
+                    if (!parsed || typeof parsed !== 'object') return null;
+
+                    const decodedRoomCode = typeof parsed.c === 'string' && parsed.c ? parsed.c : generateRoomCode();
+                    const decodedTitle = typeof parsed.t === 'string' && parsed.t.trim() ? parsed.t : DEFAULT_TITLE;
+                    const rawList = Array.isArray(parsed.p) ? parsed.p : [];
+
+                    const decodedParticipants = rawList.map((entry, idx) => {
+                        if (Array.isArray(entry)) {
+                            const validDates = Array.isArray(entry[2])
+                                ? entry[2].map(Number).filter(d => Number.isInteger(d) && d >= 1 && d <= DAYS_IN_MONTH)
+                                : [];
+                            return {
+                                id: String(entry[0] || generateShortId() + idx),
+                                name: String(entry[1] || '익명'),
+                                dates: Array.from(new Set(validDates)).sort((a, b) => a - b)
+                            };
+                        } else if (entry && typeof entry === 'object') {
+                            const validDates = Array.isArray(entry.dates)
+                                ? entry.dates.map(Number).filter(d => Number.isInteger(d) && d >= 1 && d <= DAYS_IN_MONTH)
+                                : [];
+                            return {
+                                id: String(entry.id || generateShortId() + idx),
+                                name: String(entry.name || '익명'),
+                                dates: Array.from(new Set(validDates)).sort((a, b) => a - b)
+                            };
+                        }
+                        return null;
+                    }).filter(Boolean);
+
+                    return {
+                        roomCode: decodedRoomCode,
+                        title: decodedTitle,
+                        participants: decodedParticipants
+                    };
+                } catch (e) {
+                    console.warn('URL 상태 디코딩 실패:', e);
+                    return null;
+                }
+            }
+
+            function generateRoomCode() {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let code = '';
+                for (let i = 0; i < 6; i++) {
+                    code += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return code;
+            }
+
+            function generateShortId() {
+                return Date.now().toString(36).slice(-4) + Math.random().toString(36).substring(2, 5);
+            }
+
+            function syncStateToUrlAndStorage() {
+                const stateObj = {
+                    roomCode,
+                    title: eventTitle,
+                    participants
+                };
+                const encoded = encodeStateToBase64(stateObj);
+                if (encoded) {
+                    const newHash = '#s=' + encoded;
+                    try {
+                        window.history.replaceState(null, '', newHash);
+                    } catch (e) {
+                        window.location.hash = newHash;
+                    }
+                }
+
+                try {
+                    localStorage.setItem(STORAGE_PREFIX + roomCode, JSON.stringify({
+                        roomCode,
+                        title: eventTitle,
+                        participants,
+                        updatedAt: Date.now()
+                    }));
+                    localStorage.setItem(STORAGE_PREFIX + 'LAST_ACTIVE_CODE', roomCode);
+                } catch (e) {
+                    // 시크릿 모드 등 localStorage 제한 시 무시
+                }
+
+                roomIdDisplay.textContent = `방 코드: ${roomCode}`;
+            }
+
+            function loadInitialState() {
+                const hash = window.location.hash || '';
+                const match = hash.match(/[#&]s=([A-Za-z0-9+/=]+)/);
+
+                if (match && match[1]) {
+                    const decoded = decodeStateFromBase64(match[1]);
+                    if (decoded) {
+                        roomCode = decoded.roomCode;
+                        eventTitle = decoded.title;
+                        participants = decoded.participants;
+                        eventTitleInput.value = eventTitle;
+                        syncStateToUrlAndStorage();
+                        return;
+                    }
+                }
+
+                // URL 해시가 없을 경우 localStorage의 최근 방 복원 시도
+                try {
+                    const lastCode = localStorage.getItem(STORAGE_PREFIX + 'LAST_ACTIVE_CODE');
+                    if (lastCode) {
+                        const savedRaw = localStorage.getItem(STORAGE_PREFIX + lastCode);
+                        if (savedRaw) {
+                            const saved = JSON.parse(savedRaw);
+                            if (saved && saved.roomCode) {
+                                roomCode = saved.roomCode;
+                                eventTitle = saved.title || DEFAULT_TITLE;
+                                participants = Array.isArray(saved.participants) ? saved.participants : [];
+                                eventTitleInput.value = eventTitle;
+                                syncStateToUrlAndStorage();
+                                return;
+                            }
+                        }
+                    }
+                } catch (e) {}
+
+                // 완전 신규 접속 시 새 방 코드 생성
+                roomCode = generateRoomCode();
+                eventTitle = DEFAULT_TITLE;
+                participants = [];
+                eventTitleInput.value = eventTitle;
+                syncStateToUrlAndStorage();
+            }
+
+            // ==========================================
+            // 4. 유틸리티 및 UI 헬퍼
+            // ==========================================
+            function showToast(message, type = 'info') {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+
+                const colors = {
+                    success: 'bg-slate-800 text-white border-emerald-500',
+                    error: 'bg-rose-600 text-white border-rose-400',
+                    info: 'bg-slate-800 text-white border-indigo-400'
+                };
+                const icons = {
+                    success: '<i class="fa-solid fa-circle-check text-emerald-400"></i>',
+                    error: '<i class="fa-solid fa-circle-exclamation text-rose-200"></i>',
+                    info: '<i class="fa-solid fa-circle-info text-indigo-400"></i>'
+                };
+
+                toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-xl shadow-lg border-l-4 text-xs sm:text-sm font-medium flex items-center gap-2.5 animate-pop pointer-events-auto`;
+                toast.innerHTML = `${icons[type] || icons.info}<span>${message}</span>`;
+
+                container.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transform = 'translateY(10px)';
+                    toast.style.transition = 'all 0.3s ease';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+
+            function getDayOfWeek(day) {
+                return (FIRST_DAY_OF_WEEK + day - 1) % 7;
+            }
+
+            function escapeHtml(str) {
+                const div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
+
+            function copyTextToClipboard(text, silent = false) {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = text;
+                tempInput.style.position = 'fixed';
+                tempInput.style.left = '-9999px';
+                document.body.appendChild(tempInput);
+                tempInput.select();
+
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        if (!silent) showToast('공유 링크가 클립보드에 복사되었습니다!', 'success');
+                    } else {
+                        throw new Error('execCommand failed');
+                    }
+                } catch (err) {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text)
+                            .then(() => { if (!silent) showToast('공유 링크가 클립보드에 복사되었습니다!', 'success'); })
+                            .catch(() => { if (!silent) showToast('아래 링크 주소를 직접 복사해주세요.', 'info'); });
+                    } else if (!silent) {
+                        showToast('아래 링크 주소를 직접 복사해주세요.', 'info');
+                    }
+                } finally {
+                    document.body.removeChild(tempInput);
+                }
+            }
+
+            // ==========================================
+            // 5. 달력 및 현황 렌더링
+            // ==========================================
+            function getDayAvailabilityMap() {
+                const map = {};
+                for (let d = 1; d <= DAYS_IN_MONTH; d++) {
+                    map[d] = [];
+                }
+                participants.forEach(person => {
+                    if (Array.isArray(person.dates)) {
+                        person.dates.forEach(day => {
+                            if (map[day]) {
+                                map[day].push(person.name);
+                            }
+                        });
+                    }
+                });
+                return map;
+            }
+
+            function renderCalendar() {
+                const availabilityMap = getDayAvailabilityMap();
+
+                let maxCount = 0;
+                for (let d = 1; d <= DAYS_IN_MONTH; d++) {
+                    if (availabilityMap[d].length > maxCount) {
+                        maxCount = availabilityMap[d].length;
+                    }
+                }
+
+                calendarGrid.innerHTML = '';
+
+                // 2026년 12월 1일(화요일) 앞의 빈 칸 2개 (일, 월)
+                for (let empty = 0; empty < FIRST_DAY_OF_WEEK; empty++) {
+                    const emptyCell = document.createElement('div');
+                    emptyCell.className = 'min-h-[76px] sm:min-h-[88px] rounded-xl bg-slate-50/80 border border-slate-100';
+                    calendarGrid.appendChild(emptyCell);
+                }
+
+                // 1일 ~ 31일 날짜 칸 생성
+                for (let day = 1; day <= DAYS_IN_MONTH; day++) {
+                    const dow = getDayOfWeek(day);
+                    const isSelected = mySelectedDates.has(day);
+                    const voters = availabilityMap[day];
+                    const count = voters.length;
+                    const isPopular = maxCount > 0 && count === maxCount;
+
+                    const cell = document.createElement('div');
+                    let baseBorderBg = 'bg-white border-slate-200/80 hover:border-indigo-300 hover:shadow-xs';
+                    if (isSelected && isPopular) {
+                        baseBorderBg = 'bg-emerald-50/60 border-indigo-500 ring-2 ring-indigo-200';
+                    } else if (isSelected) {
+                        baseBorderBg = 'bg-indigo-50/40 border-indigo-500 ring-2 ring-indigo-100';
+                    } else if (isPopular) {
+                        baseBorderBg = 'bg-emerald-50/60 border-emerald-300 hover:border-emerald-400';
+                    }
+
+                    cell.className = `relative min-h-[76px] sm:min-h-[88px] p-1.5 sm:p-2 rounded-xl border transition-all cursor-pointer select-none flex flex-col justify-between overflow-hidden ${baseBorderBg}`;
+
+                    // 날짜 숫자 색상
+                    let dateColorClass = 'text-slate-700';
+                    if (dow === 0) dateColorClass = 'text-rose-500';
+                    else if (dow === 6) dateColorClass = 'text-blue-600';
+
+                    // 상단: 날짜 숫자 + 인원 수 뱃지
+                    const topRow = document.createElement('div');
+                    topRow.className = 'flex items-center justify-between gap-1 z-10';
+
+                    const dateSpan = document.createElement('span');
+                    dateSpan.className = `text-xs sm:text-sm font-bold leading-none ${dateColorClass}`;
+                    dateSpan.textContent = day;
+                    topRow.appendChild(dateSpan);
+
+                    if (count > 0) {
+                        const countBadge = document.createElement('button');
+                        countBadge.type = 'button';
+                        countBadge.className = `px-1.5 py-0.5 rounded-md text-[10px] font-extrabold leading-none transition ${
+                            isPopular
+                                ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                                : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                        }`;
+                        countBadge.textContent = `${count}명`;
+                        countBadge.title = '클릭하여 가능한 인원 명단 보기';
+                        countBadge.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            openDayDetailModal(day, voters);
+                        });
+                        topRow.appendChild(countBadge);
+                    }
+
+                    cell.appendChild(topRow);
+
+                    // 중앙 파란색 'O' 링/마크 표시 (내가 선택한 날짜일 때)
+                    if (isSelected) {
+                        const oMark = document.createElement('div');
+                        oMark.className = 'absolute inset-0 flex items-center justify-center pointer-events-none animate-pop';
+                        oMark.innerHTML = `<span class="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-[4px] border-indigo-600/35 flex items-center justify-center"></span>`;
+                        cell.appendChild(oMark);
+                    }
+
+                    // 하단: 참여자 이름 요약
+                    const bottomRow = document.createElement('div');
+                    bottomRow.className = 'z-10 mt-1';
+                    if (count > 0) {
+                        const namesText = voters.slice(0, 2).join(', ') + (count > 2 ? ` 외 ${count - 2}` : '');
+                        bottomRow.innerHTML = `<p class="text-[10px] font-medium text-slate-500 truncate leading-tight">${escapeHtml(namesText)}</p>`;
+                    }
+                    cell.appendChild(bottomRow);
+
+                    // 날짜 칸 클릭 시 내 선택 토글
+                    cell.addEventListener('click', () => {
+                        toggleMyDaySelection(day);
+                    });
+
+                    calendarGrid.appendChild(cell);
+                }
+
+                updateSelectedSummaryUI();
+                updateBestDayBanner(availabilityMap, maxCount);
+            }
+
+            function toggleMyDaySelection(day) {
+                if (mySelectedDates.has(day)) {
+                    mySelectedDates.delete(day);
+                } else {
+                    mySelectedDates.add(day);
+                }
+                renderCalendar();
+            }
+
+            function updateSelectedSummaryUI() {
+                const sortedDates = Array.from(mySelectedDates).sort((a, b) => a - b);
+                selectedCountSummary.textContent = sortedDates.length;
+
+                if (sortedDates.length === 0) {
+                    btnClearMySelection.classList.add('hidden');
+                    mySelectedPills.innerHTML = '<span class="text-slate-400">왼쪽 달력에서 가능한 날짜를 클릭해 O 표시를 해주세요.</span>';
+                } else {
+                    btnClearMySelection.classList.remove('hidden');
+                    mySelectedPills.innerHTML = sortedDates.map(day => {
+                        const dowName = DAY_NAMES[getDayOfWeek(day)];
+                        return `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold shadow-2xs">
+                            12/${day}(${dowName})
+                            <button type="button" data-remove-day="${day}" class="ml-0.5 text-indigo-200 hover:text-white leading-none">&times;</button>
+                        </span>`;
+                    }).join('');
+
+                    mySelectedPills.querySelectorAll('[data-remove-day]').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const targetDay = Number(btn.getAttribute('data-remove-day'));
+                            mySelectedDates.delete(targetDay);
+                            renderCalendar();
+                        });
+                    });
+                }
+            }
+
+            function updateBestDayBanner(availabilityMap, maxCount) {
+                if (maxCount === 0 || participants.length === 0) {
+                    bestDayText.textContent = '아직 등록된 일정이 없습니다. 달력에 O 표시를 남겨보세요!';
+                    bestDayMeta.classList.add('hidden');
+                    bestDayMeta.classList.remove('sm:flex');
+                    return;
+                }
+
+                const bestDays = [];
+                for (let d = 1; d <= DAYS_IN_MONTH; d++) {
+                    if (availabilityMap[d].length === maxCount) {
+                        bestDays.push(d);
+                    }
+                }
+
+                const formattedDates = bestDays.slice(0, 3).map(d => `12월 ${d}일(${DAY_NAMES[getDayOfWeek(d)]})`).join(', ')
+                    + (bestDays.length > 3 ? ` 외 ${bestDays.length - 3}일` : '');
+
+                const sampleVoters = availabilityMap[bestDays[0]];
+                const voterPreview = sampleVoters.slice(0, 3).join(', ') + (sampleVoters.length > 3 ? '...' : '');
+
+                bestDayText.textContent = `${formattedDates} — 총 ${maxCount}명 가능 (${voterPreview})`;
+                bestDayCount.textContent = `${maxCount}명 / ${participants.length}명 가능`;
+                bestDayAvatars.textContent = sampleVoters.join(', ');
+                bestDayMeta.classList.remove('hidden');
+                bestDayMeta.classList.add('sm:flex');
+            }
+
+            function renderParticipantsList() {
+                totalParticipantsBadge.textContent = `${participants.length}명`;
+
+                if (participants.length === 0) {
+                    participantsList.innerHTML = `
+                        <div class="py-10 px-4 text-center">
+                            <div class="w-11 h-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3 text-lg">
+                                <i class="fa-regular fa-calendar-check"></i>
+                            </div>
+                            <p class="text-xs sm:text-sm font-medium text-slate-400 leading-relaxed">
+                                아직 참여한 사람이 없습니다.<br>링크를 공유하고 일정을 모아보세요!
+                            </p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                participantsList.innerHTML = '';
+                participants.forEach(person => {
+                    const isBeingEdited = editingParticipantId === person.id;
+                    const sortedDates = [...(person.dates || [])].sort((a, b) => a - b);
+
+                    const card = document.createElement('div');
+                    card.className = `p-3.5 rounded-xl border transition ${
+                        isBeingEdited
+                            ? 'bg-indigo-50/60 border-indigo-300'
+                            : 'bg-slate-50/80 border-slate-200/70 hover:bg-slate-50'
+                    }`;
+
+                    const dayTagsHtml = sortedDates.map(d => {
+                        const dow = DAY_NAMES[getDayOfWeek(d)];
+                        return `<span class="px-2 py-0.5 rounded-md bg-white border border-slate-200/80 text-[11px] font-semibold text-slate-700">12/${d}(${dow})</span>`;
+                    }).join('');
+
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <div class="flex items-center gap-2 min-w-0 cursor-pointer flex-1 btn-select-person" title="클릭하여 일정 수정하기">
+                                <span class="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                                    ${escapeHtml(person.name.charAt(0))}
+                                </span>
+                                <span class="text-sm font-bold text-slate-800 truncate">${escapeHtml(person.name)}</span>
+                                <span class="text-[11px] font-semibold text-indigo-600 shrink-0">${sortedDates.length}일 가능</span>
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button type="button" class="btn-edit-person px-2 py-1 text-[11px] font-semibold text-slate-500 hover:text-indigo-600 hover:bg-white rounded-lg transition" title="일정 수정">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>
+                                <button type="button" class="btn-delete-person px-2 py-1 text-[11px] font-semibold text-slate-400 hover:text-rose-600 hover:bg-white rounded-lg transition" title="응답 삭제">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-1">${dayTagsHtml}</div>
+                    `;
+
+                    card.querySelector('.btn-select-person').addEventListener('click', () => startEditingParticipant(person));
+                    card.querySelector('.btn-edit-person').addEventListener('click', () => startEditingParticipant(person));
+                    card.querySelector('.btn-delete-person').addEventListener('click', () => openDeleteConfirmModal(person));
+
+                    participantsList.appendChild(card);
+                });
+            }
+
+            function startEditingParticipant(person) {
+                editingParticipantId = person.id;
+                participantNameInput.value = person.name;
+                mySelectedDates = new Set(person.dates || []);
+
+                formModeTitle.textContent = `'${person.name}'님 일정 수정`;
+                btnSubmitText.textContent = '수정 완료하기';
+                btnCancelEdit.classList.remove('hidden');
+
+                renderCalendar();
+                renderParticipantsList();
+                participantNameInput.focus();
+                showToast(`'${person.name}'님의 일정을 불러왔습니다.`, 'info');
+            }
+
+            function cancelEditingMode() {
+                editingParticipantId = null;
+                participantNameInput.value = '';
+                mySelectedDates.clear();
+
+                formModeTitle.textContent = '내 가능 날짜 등록하기';
+                btnSubmitText.textContent = '등록하기';
+                btnCancelEdit.classList.add('hidden');
+
+                renderCalendar();
+                renderParticipantsList();
+            }
+
+            // ==========================================
+            // 6. 모달 제어
+            // ==========================================
+            const dayDetailModal = document.getElementById('day-detail-modal');
+            const modalDayTitle = document.getElementById('modal-day-title');
+            const modalDayList = document.getElementById('modal-day-list');
+            const btnToggleFromModal = document.getElementById('btn-toggle-from-modal');
+
+            function openDayDetailModal(day, voters) {
+                activeModalDay = day;
+                const dowName = DAY_NAMES[getDayOfWeek(day)];
+                modalDayTitle.textContent = `12월 ${day}일 (${dowName}) 가능 인원 (${voters.length}명)`;
+
+                if (voters.length === 0) {
+                    modalDayList.innerHTML = '<p class="text-slate-400 text-center py-4">아직 가능한 인원이 없습니다.</p>';
+                } else {
+                    modalDayList.innerHTML = voters.map(name => `
+                        <div class="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-100">
+                            <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center">O</span>
+                            <span class="font-semibold text-slate-800">${escapeHtml(name)}</span>
+                        </div>
+                    `).join('');
+                }
+
+                btnToggleFromModal.textContent = mySelectedDates.has(day)
+                    ? '내 선택에서 O 표시 해제하기'
+                    : '이 날짜 내 선택에 O 표시하기';
+
+                dayDetailModal.classList.remove('hidden');
+                dayDetailModal.classList.add('flex');
+            }
+
+            document.getElementById('btn-close-day-modal').addEventListener('click', () => {
+                dayDetailModal.classList.add('hidden');
+                dayDetailModal.classList.remove('flex');
+            });
+
+            btnToggleFromModal.addEventListener('click', () => {
+                if (activeModalDay !== null) {
+                    toggleMyDaySelection(activeModalDay);
+                }
+                dayDetailModal.classList.add('hidden');
+                dayDetailModal.classList.remove('flex');
+            });
+
+            // 공유 링크 모달 열기
+            function openShareLinkModal(customTitle = '공유 링크가 복사되었습니다!') {
+                syncStateToUrlAndStorage();
+                const shareUrl = window.location.href;
+                const shareModal = document.getElementById('share-modal');
+                const shareUrlInput = document.getElementById('share-url-input');
+                document.getElementById('share-modal-title').textContent = customTitle;
+
+                shareUrlInput.value = shareUrl;
+                shareModal.classList.remove('hidden');
+                shareModal.classList.add('flex');
+                copyTextToClipboard(shareUrl, false);
+            }
+
+            document.getElementById('btn-copy-link').addEventListener('click', () => {
+                openShareLinkModal('공유 링크가 복사되었습니다!');
+            });
+
+            document.getElementById('btn-modal-copy-url').addEventListener('click', () => {
+                const shareUrl = document.getElementById('share-url-input').value;
+                copyTextToClipboard(shareUrl, false);
+            });
+
+            document.getElementById('btn-close-share-modal').addEventListener('click', () => {
+                const shareModal = document.getElementById('share-modal');
+                shareModal.classList.add('hidden');
+                shareModal.classList.remove('flex');
+            });
+
+            // 삭제 확인 모달
+            const deleteModal = document.getElementById('delete-modal');
+            const deleteModalDesc = document.getElementById('delete-modal-desc');
+
+            function openDeleteConfirmModal(person) {
+                pendingDeleteId = person.id;
+                deleteModalDesc.textContent = `'${person.name}'님의 12월 약속 응답을 삭제하시겠습니까?`;
+                deleteModal.classList.remove('hidden');
+                deleteModal.classList.add('flex');
+            }
+
+            document.getElementById('btn-cancel-delete').addEventListener('click', () => {
+                pendingDeleteId = null;
+                deleteModal.classList.add('hidden');
+                deleteModal.classList.remove('flex');
+            });
+
+            document.getElementById('btn-confirm-delete').addEventListener('click', () => {
+                if (!pendingDeleteId) return;
+                const targetId = pendingDeleteId;
+                pendingDeleteId = null;
+                deleteModal.classList.add('hidden');
+                deleteModal.classList.remove('flex');
+
+                if (editingParticipantId === targetId) {
+                    cancelEditingMode();
+                }
+                participants = participants.filter(p => p.id !== targetId);
+                syncStateToUrlAndStorage();
+                renderCalendar();
+                renderParticipantsList();
+                showToast('참여자 응답이 삭제되었으며 링크가 업데이트되었습니다.', 'info');
+            });
+
+            // 새 모임 확인 모달
+            const resetRoomModal = document.getElementById('reset-room-modal');
+            document.getElementById('btn-new-room').addEventListener('click', () => {
+                resetRoomModal.classList.remove('hidden');
+                resetRoomModal.classList.add('flex');
+            });
+
+            document.getElementById('btn-cancel-reset-room').addEventListener('click', () => {
+                resetRoomModal.classList.add('hidden');
+                resetRoomModal.classList.remove('flex');
+            });
+
+            document.getElementById('btn-confirm-reset-room').addEventListener('click', () => {
+                resetRoomModal.classList.add('hidden');
+                resetRoomModal.classList.remove('flex');
+
+                roomCode = generateRoomCode();
+                eventTitle = DEFAULT_TITLE;
+                eventTitleInput.value = eventTitle;
+                participants = [];
+                cancelEditingMode();
+                syncStateToUrlAndStorage();
+                showToast(`새 모임 방(${roomCode})이 생성되었습니다!`, 'success');
+            });
+
+            // ==========================================
+            // 7. 입력 및 등록 버튼 이벤트
+            // ==========================================
+            eventTitleInput.addEventListener('input', () => {
+                eventTitle = eventTitleInput.value.trim() || DEFAULT_TITLE;
+                clearTimeout(titleDebounceTimer);
+                titleDebounceTimer = setTimeout(() => {
+                    syncStateToUrlAndStorage();
+                }, 300);
+            });
+
+            btnSubmitVote.addEventListener('click', () => {
+                const name = participantNameInput.value.trim();
+                if (!name) {
+                    showToast('이름(닉네임)을 입력해주세요!', 'error');
+                    participantNameInput.focus();
+                    return;
+                }
+
+                if (mySelectedDates.size === 0) {
+                    showToast('달력에서 가능한 날짜를 최소 1개 이상 선택해 O 표시를 해주세요!', 'error');
+                    return;
+                }
+
+                const selectedArray = Array.from(mySelectedDates).sort((a, b) => a - b);
+
+                if (editingParticipantId) {
+                    const idx = participants.findIndex(p => p.id === editingParticipantId);
+                    if (idx !== -1) {
+                        participants[idx] = {
+                            ...participants[idx],
+                            name: name,
+                            dates: selectedArray
+                        };
+                    }
+                    cancelEditingMode();
+                } else {
+                    const existingIdx = participants.findIndex(p => p.name === name);
+                    if (existingIdx !== -1) {
+                        participants[existingIdx] = {
+                            ...participants[existingIdx],
+                            dates: selectedArray
+                        };
+                    } else {
+                        participants.push({
+                            id: generateShortId(),
+                            name: name,
+                            dates: selectedArray
+                        });
+                    }
+                    participantNameInput.value = '';
+                    mySelectedDates.clear();
+                }
+
+                syncStateToUrlAndStorage();
+                renderCalendar();
+                renderParticipantsList();
+                openShareLinkModal(`'${name}'님 일정 등록 완료! 새 공유 링크`);
+            });
+
+            btnCancelEdit.addEventListener('click', cancelEditingMode);
+            btnClearMySelection.addEventListener('click', () => {
+                mySelectedDates.clear();
+                renderCalendar();
+            });
+
+            // 브라우저 뒤로가기/앞으로가기 또는 해시 직접 변경 시 동기화
+            window.addEventListener('hashchange', () => {
+                loadInitialState();
+                renderCalendar();
+                renderParticipantsList();
+            });
+
+            // ==========================================
+            // 8. 앱 시작
+            // ==========================================
+            loadInitialState();
+            renderCalendar();
+            renderParticipantsList();
+        })();
+    </script>
+</body>
+</html>
