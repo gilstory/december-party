@@ -12,6 +12,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Firebase 실시간 데이터베이스 (모든 참여자가 같은 응답을 실시간으로 공유) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
     <style>
         body {
             font-family: 'Inter', 'Noto Sans KR', sans-serif;
@@ -84,7 +87,7 @@
                 <div class="flex-1 min-w-0">
                     <label for="event-title-input" class="block text-xs font-semibold text-slate-400 mb-1">약속 제목 (클릭하여 수정 가능)</label>
                     <div class="relative flex items-center">
-                        <input type="text" id="event-title-input" placeholder="예: 2026년 12월 모임 약속 잡기"
+                        <input type="text" id="event-title-input" maxlength="60" placeholder="예: 2026년 12월 모임 약속 잡기"
                                class="w-full text-xl sm:text-2xl font-extrabold text-slate-900 bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-indigo-500 focus:outline-none py-0.5 pr-8 transition truncate"
                                value="2026년 12월 모임 약속 잡기">
                         <i class="fa-solid fa-pen text-slate-300 text-sm absolute right-2 pointer-events-none"></i>
@@ -93,8 +96,8 @@
 
                 <!-- 상태 배지 (링크 자동 저장 | 방 코드) -->
                 <div class="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/80 self-start sm:self-center font-medium shrink-0">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span>링크 자동 저장</span>
+                    <span id="sync-dot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+                    <span id="sync-text">연결 중…</span>
                     <span class="text-slate-300">|</span>
                     <span class="font-mono font-bold text-slate-700" id="room-id-display">방 코드: -</span>
                 </div>
@@ -267,7 +270,7 @@
             </div>
             <div class="py-4 space-y-3">
                 <p class="text-xs text-slate-600 leading-relaxed bg-indigo-50/70 border border-indigo-100 rounded-xl p-3">
-                    아래 링크를 복사해 단톡방에 공유하세요! 다른 사람이 투표 후 새 링크를 공유하면 결과가 계속 누적됩니다.
+                    아래 링크를 단톡방에 한 번만 공유하세요! 링크는 바뀌지 않고, 누가 응답하든 모든 사람의 화면에 실시간으로 반영됩니다.
                 </p>
                 <div class="flex items-center gap-2">
                     <input type="text" id="share-url-input" readonly
@@ -317,24 +320,39 @@
     <script>
         (function () {
             // ==========================================
+            // 0. Firebase 실시간 데이터베이스 주소 (Firebase 콘솔 > Realtime Database)
+            //    공개되어도 되는 주소이며, 읽기·쓰기 범위는 데이터베이스 보안 규칙(database.rules.json)이 제한합니다.
+            // ==========================================
+            const firebaseConfig = {
+                projectId: 'december-party-68c33',
+                databaseURL: 'https://december-party-68c33-default-rtdb.asia-southeast1.firebasedatabase.app'
+            };
+
+            // ==========================================
             // 1. 상수 및 상태 변수
             // ==========================================
             const STORAGE_PREFIX = 'dec2026_ghpages_room_';
+            const LAST_ROOM_KEY = STORAGE_PREFIX + 'LAST_ACTIVE_CODE';
             const DEFAULT_TITLE = '2026년 12월 모임 약속 잡기';
+            const ROOM_CODE_RE = /^[A-Z0-9]{6}$/;
+            const PARTICIPANT_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
 
             // 2026년 12월: 12월 1일 = 화요일 (일=0, 월=1, 화=2), 총 31일
             const FIRST_DAY_OF_WEEK = 2;
             const DAYS_IN_MONTH = 31;
             const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
+            let db = null;
+            let roomRef = null;
             let roomCode = '';
             let eventTitle = DEFAULT_TITLE;
-            let participants = []; // [{ id, name, dates: number[] }]
+            let participants = []; // [{ id, name, dates: number[], createdAt }]
             let mySelectedDates = new Set();
             let editingParticipantId = null;
             let pendingDeleteId = null;
             let activeModalDay = null;
             let titleDebounceTimer = null;
+            let titleDirty = false; // 제목을 고치는 중(아직 저장 전)이면 다른 사람의 변경으로 덮어쓰지 않는다
 
             // ==========================================
             // 2. DOM 요소 참조
@@ -356,79 +374,36 @@
             const bestDayCount = document.getElementById('best-day-count');
             const bestDayAvatars = document.getElementById('best-day-avatars');
             const roomIdDisplay = document.getElementById('room-id-display');
+            const syncDot = document.getElementById('sync-dot');
+            const syncText = document.getElementById('sync-text');
 
             // ==========================================
-            // 3. UTF-8 안전 Base64 압축 인코딩/디코딩 & URL 해시 상태 동기화
+            // 3. 실시간 저장소(Firebase) 연결 및 방 동기화
             // ==========================================
-            function encodeStateToBase64(stateObj) {
-                try {
-                    // URL 길이를 최소화하기 위해 축약 키 사용 (c: roomCode, t: title, p: participants)
-                    const compact = {
-                        c: stateObj.roomCode,
-                        t: stateObj.title,
-                        p: stateObj.participants.map(item => [
-                            item.id,
-                            item.name,
-                            item.dates
-                        ])
-                    };
-                    const jsonStr = JSON.stringify(compact);
-                    const utf8Bytes = encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g, (_, p1) =>
-                        String.fromCharCode(parseInt(p1, 16))
-                    );
-                    return btoa(utf8Bytes);
-                } catch (e) {
-                    console.error('상태 인코딩 실패:', e);
-                    return '';
-                }
+            function setSyncStatus(state, label) {
+                const dotColors = { online: 'bg-emerald-500', connecting: 'bg-amber-400', error: 'bg-rose-500' };
+                syncDot.className = `w-2 h-2 rounded-full ${dotColors[state] || dotColors.connecting}`;
+                syncText.textContent = label || (state === 'online' ? '실시간 연결됨' : state === 'error' ? '연결 오류' : '연결 중…');
             }
 
-            function decodeStateFromBase64(encodedStr) {
+            function initFirebase() {
+                const configured = /^https:\/\//.test(firebaseConfig.databaseURL || '');
+                if (!window.firebase || !configured) {
+                    setSyncStatus('error', '저장소 미연결');
+                    showToast('실시간 저장소에 연결하지 못했습니다. 잠시 후 새로고침해주세요.', 'error');
+                    return false;
+                }
                 try {
-                    const binaryStr = atob(encodedStr);
-                    const percentEncoded = Array.from(binaryStr).map(ch =>
-                        '%' + ('00' + ch.charCodeAt(0).toString(16)).slice(-2)
-                    ).join('');
-                    const jsonStr = decodeURIComponent(percentEncoded);
-                    const parsed = JSON.parse(jsonStr);
-
-                    if (!parsed || typeof parsed !== 'object') return null;
-
-                    const decodedRoomCode = typeof parsed.c === 'string' && parsed.c ? parsed.c : generateRoomCode();
-                    const decodedTitle = typeof parsed.t === 'string' && parsed.t.trim() ? parsed.t : DEFAULT_TITLE;
-                    const rawList = Array.isArray(parsed.p) ? parsed.p : [];
-
-                    const decodedParticipants = rawList.map((entry, idx) => {
-                        if (Array.isArray(entry)) {
-                            const validDates = Array.isArray(entry[2])
-                                ? entry[2].map(Number).filter(d => Number.isInteger(d) && d >= 1 && d <= DAYS_IN_MONTH)
-                                : [];
-                            return {
-                                id: String(entry[0] || generateShortId() + idx),
-                                name: String(entry[1] || '익명'),
-                                dates: Array.from(new Set(validDates)).sort((a, b) => a - b)
-                            };
-                        } else if (entry && typeof entry === 'object') {
-                            const validDates = Array.isArray(entry.dates)
-                                ? entry.dates.map(Number).filter(d => Number.isInteger(d) && d >= 1 && d <= DAYS_IN_MONTH)
-                                : [];
-                            return {
-                                id: String(entry.id || generateShortId() + idx),
-                                name: String(entry.name || '익명'),
-                                dates: Array.from(new Set(validDates)).sort((a, b) => a - b)
-                            };
-                        }
-                        return null;
-                    }).filter(Boolean);
-
-                    return {
-                        roomCode: decodedRoomCode,
-                        title: decodedTitle,
-                        participants: decodedParticipants
-                    };
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.database();
+                    db.ref('.info/connected').on('value', snap => {
+                        setSyncStatus(snap.val() ? 'online' : 'connecting');
+                    });
+                    return true;
                 } catch (e) {
-                    console.warn('URL 상태 디코딩 실패:', e);
-                    return null;
+                    console.error('Firebase 초기화 실패:', e);
+                    setSyncStatus('error', '저장소 미연결');
+                    return false;
                 }
             }
 
@@ -442,81 +417,142 @@
             }
 
             function generateShortId() {
-                return Date.now().toString(36).slice(-4) + Math.random().toString(36).substring(2, 5);
+                return Date.now().toString(36).slice(-4) + Math.random().toString(36).substring(2, 7);
             }
 
-            function syncStateToUrlAndStorage() {
-                const stateObj = {
-                    roomCode,
-                    title: eventTitle,
-                    participants
-                };
-                const encoded = encodeStateToBase64(stateObj);
-                if (encoded) {
-                    const newHash = '#s=' + encoded;
-                    try {
-                        window.history.replaceState(null, '', newHash);
-                    } catch (e) {
-                        window.location.hash = newHash;
-                    }
+            function getRoomFromUrl() {
+                const params = new URLSearchParams(window.location.search);
+                let code = (params.get('room') || '').toUpperCase();
+                if (!ROOM_CODE_RE.test(code)) {
+                    const m = window.location.hash.match(/room=([A-Za-z0-9]{6})/);
+                    code = m ? m[1].toUpperCase() : '';
                 }
+                return ROOM_CODE_RE.test(code) ? code : '';
+            }
 
+            function buildShareUrl(code) {
+                return window.location.href.split(/[?#]/)[0] + '?room=' + code;
+            }
+
+            // 예전 방식(#s=… 링크에 응답을 통째로 담던 방식) 링크 읽기 — 그 방이 처음 열릴 때만 옮겨 담는다
+            function parseLegacyHash() {
+                const match = (window.location.hash || '').match(/[#&]s=([A-Za-z0-9+/=]+)/);
+                if (!match) return null;
                 try {
-                    localStorage.setItem(STORAGE_PREFIX + roomCode, JSON.stringify({
-                        roomCode,
-                        title: eventTitle,
-                        participants,
-                        updatedAt: Date.now()
-                    }));
-                    localStorage.setItem(STORAGE_PREFIX + 'LAST_ACTIVE_CODE', roomCode);
+                    const binaryStr = atob(match[1]);
+                    const percentEncoded = Array.from(binaryStr).map(ch =>
+                        '%' + ('00' + ch.charCodeAt(0).toString(16)).slice(-2)
+                    ).join('');
+                    const parsed = JSON.parse(decodeURIComponent(percentEncoded));
+                    if (!parsed || typeof parsed !== 'object') return null;
+                    const list = Array.isArray(parsed.p) ? parsed.p : [];
+                    return {
+                        roomCode: typeof parsed.c === 'string' ? parsed.c.toUpperCase() : '',
+                        title: typeof parsed.t === 'string' ? parsed.t.slice(0, 60) : '',
+                        participants: list.map(entry => {
+                            const obj = Array.isArray(entry)
+                                ? { id: entry[0], name: entry[1], dates: entry[2] }
+                                : (entry || {});
+                            return normalizeParticipant(String(obj.id || ''), obj);
+                        }).filter(p => p && p.dates.length > 0)
+                    };
                 } catch (e) {
-                    // 시크릿 모드 등 localStorage 제한 시 무시
+                    console.warn('예전 링크 해석 실패:', e);
+                    return null;
                 }
-
-                roomIdDisplay.textContent = `방 코드: ${roomCode}`;
             }
 
-            function loadInitialState() {
-                const hash = window.location.hash || '';
-                const match = hash.match(/[#&]s=([A-Za-z0-9+/=]+)/);
+            function importLegacyIfRoomEmpty(legacy) {
+                if (!db || !legacy || legacy.roomCode !== roomCode || legacy.participants.length === 0) return;
+                roomRef.once('value').then(snap => {
+                    if (snap.exists()) return;
+                    const updates = {};
+                    if (legacy.title.trim()) updates.title = legacy.title.trim();
+                    legacy.participants.forEach(p => {
+                        const id = PARTICIPANT_ID_RE.test(p.id) ? p.id : generateShortId();
+                        updates['participants/' + id] = {
+                            name: p.name,
+                            dates: p.dates,
+                            createdAt: Date.now(),
+                            updatedAt: firebase.database.ServerValue.TIMESTAMP
+                        };
+                    });
+                    return roomRef.update(updates).then(() => {
+                        showToast('예전 링크의 응답을 실시간 저장소로 옮겼습니다.', 'success');
+                    });
+                }).catch(e => console.warn('예전 응답 옮기기 실패:', e));
+            }
 
-                if (match && match[1]) {
-                    const decoded = decodeStateFromBase64(match[1]);
-                    if (decoded) {
-                        roomCode = decoded.roomCode;
-                        eventTitle = decoded.title;
-                        participants = decoded.participants;
-                        eventTitleInput.value = eventTitle;
-                        syncStateToUrlAndStorage();
-                        return;
-                    }
+            function normalizeParticipant(id, value) {
+                if (!value || typeof value !== 'object') return null;
+                const rawDates = Array.isArray(value.dates)
+                    ? value.dates
+                    : (value.dates && typeof value.dates === 'object' ? Object.values(value.dates) : []);
+                const validDates = rawDates.map(Number).filter(d => Number.isInteger(d) && d >= 1 && d <= DAYS_IN_MONTH);
+                return {
+                    id: String(id),
+                    name: String(value.name || '익명').slice(0, 20),
+                    dates: Array.from(new Set(validDates)).sort((a, b) => a - b),
+                    createdAt: Number(value.createdAt) || 0
+                };
+            }
+
+            function applyRoomData(data) {
+                const room = data || {};
+                eventTitle = typeof room.title === 'string' && room.title.trim() ? room.title : DEFAULT_TITLE;
+                if (document.activeElement !== eventTitleInput && !titleDirty) {
+                    eventTitleInput.value = eventTitle;
                 }
 
-                // URL 해시가 없을 경우 localStorage의 최근 방 복원 시도
-                try {
-                    const lastCode = localStorage.getItem(STORAGE_PREFIX + 'LAST_ACTIVE_CODE');
-                    if (lastCode) {
-                        const savedRaw = localStorage.getItem(STORAGE_PREFIX + lastCode);
-                        if (savedRaw) {
-                            const saved = JSON.parse(savedRaw);
-                            if (saved && saved.roomCode) {
-                                roomCode = saved.roomCode;
-                                eventTitle = saved.title || DEFAULT_TITLE;
-                                participants = Array.isArray(saved.participants) ? saved.participants : [];
-                                eventTitleInput.value = eventTitle;
-                                syncStateToUrlAndStorage();
-                                return;
-                            }
-                        }
-                    }
-                } catch (e) {}
+                const raw = room.participants && typeof room.participants === 'object' ? room.participants : {};
+                participants = Object.keys(raw)
+                    .map(id => normalizeParticipant(id, raw[id]))
+                    .filter(Boolean)
+                    .sort((a, b) => (a.createdAt - b.createdAt) || a.name.localeCompare(b.name, 'ko'));
 
-                // 완전 신규 접속 시 새 방 코드 생성
-                roomCode = generateRoomCode();
-                eventTitle = DEFAULT_TITLE;
+                if (editingParticipantId && !participants.some(p => p.id === editingParticipantId)) {
+                    cancelEditingMode();
+                    showToast('수정 중이던 응답이 다른 사람에 의해 삭제되었습니다.', 'info');
+                    return;
+                }
+
+                renderCalendar();
+                renderParticipantsList();
+            }
+
+            function joinRoom(code) {
+                if (roomRef) roomRef.off();
+                roomCode = code;
                 participants = [];
-                eventTitleInput.value = eventTitle;
-                syncStateToUrlAndStorage();
+                eventTitle = DEFAULT_TITLE;
+
+                try {
+                    window.history.replaceState(null, '', '?room=' + code);
+                } catch (e) {}
+                try {
+                    localStorage.setItem(LAST_ROOM_KEY, code);
+                } catch (e) {}
+                roomIdDisplay.textContent = `방 코드: ${code}`;
+
+                renderCalendar();
+                renderParticipantsList();
+
+                if (!db) return;
+                roomRef = db.ref('rooms/' + code);
+                roomRef.on('value',
+                    snap => applyRoomData(snap.val()),
+                    err => {
+                        console.error('방 데이터 읽기 실패:', err);
+                        setSyncStatus('error', '읽기 실패');
+                        showToast('응답을 불러오지 못했습니다. 새로고침해주세요.', 'error');
+                    }
+                );
+            }
+
+            function requireConnection() {
+                if (roomRef) return true;
+                showToast('실시간 저장소에 연결되지 않아 저장할 수 없습니다. 새로고침해주세요.', 'error');
+                return false;
             }
 
             // ==========================================
@@ -538,7 +574,10 @@
                 };
 
                 toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-xl shadow-lg border-l-4 text-xs sm:text-sm font-medium flex items-center gap-2.5 animate-pop pointer-events-auto`;
-                toast.innerHTML = `${icons[type] || icons.info}<span>${message}</span>`;
+                toast.innerHTML = icons[type] || icons.info;
+                const text = document.createElement('span');
+                text.textContent = message; // 참여자 이름이 들어가므로 HTML로 해석하지 않는다
+                toast.appendChild(text);
 
                 container.appendChild(toast);
                 setTimeout(() => {
@@ -596,13 +635,11 @@
                     map[d] = [];
                 }
                 participants.forEach(person => {
-                    if (Array.isArray(person.dates)) {
-                        person.dates.forEach(day => {
-                            if (map[day]) {
-                                map[day].push(person.name);
-                            }
-                        });
-                    }
+                    person.dates.forEach(day => {
+                        if (map[day]) {
+                            map[day].push(person.name);
+                        }
+                    });
                 });
                 return map;
             }
@@ -793,7 +830,7 @@
                 participantsList.innerHTML = '';
                 participants.forEach(person => {
                     const isBeingEdited = editingParticipantId === person.id;
-                    const sortedDates = [...(person.dates || [])].sort((a, b) => a - b);
+                    const sortedDates = [...person.dates].sort((a, b) => a - b);
 
                     const card = document.createElement('div');
                     card.className = `p-3.5 rounded-xl border transition ${
@@ -839,7 +876,7 @@
             function startEditingParticipant(person) {
                 editingParticipantId = person.id;
                 participantNameInput.value = person.name;
-                mySelectedDates = new Set(person.dates || []);
+                mySelectedDates = new Set(person.dates);
 
                 formModeTitle.textContent = `'${person.name}'님 일정 수정`;
                 btnSubmitText.textContent = '수정 완료하기';
@@ -909,10 +946,9 @@
                 dayDetailModal.classList.remove('flex');
             });
 
-            // 공유 링크 모달 열기
+            // 공유 링크 모달 열기 — 링크는 방 코드만 담으므로 응답이 늘어도 바뀌지 않는다
             function openShareLinkModal(customTitle = '공유 링크가 복사되었습니다!') {
-                syncStateToUrlAndStorage();
-                const shareUrl = window.location.href;
+                const shareUrl = buildShareUrl(roomCode);
                 const shareModal = document.getElementById('share-modal');
                 const shareUrlInput = document.getElementById('share-url-input');
                 document.getElementById('share-modal-title').textContent = customTitle;
@@ -961,15 +997,17 @@
                 pendingDeleteId = null;
                 deleteModal.classList.add('hidden');
                 deleteModal.classList.remove('flex');
+                if (!requireConnection()) return;
 
                 if (editingParticipantId === targetId) {
                     cancelEditingMode();
                 }
-                participants = participants.filter(p => p.id !== targetId);
-                syncStateToUrlAndStorage();
-                renderCalendar();
-                renderParticipantsList();
-                showToast('참여자 응답이 삭제되었으며 링크가 업데이트되었습니다.', 'info');
+                roomRef.child('participants/' + targetId).remove()
+                    .then(() => showToast('참여자 응답이 삭제되었습니다. 모두의 화면에 바로 반영됩니다.', 'info'))
+                    .catch(err => {
+                        console.error('삭제 실패:', err);
+                        showToast('삭제하지 못했습니다. 인터넷 연결을 확인해주세요.', 'error');
+                    });
             });
 
             // 새 모임 확인 모달
@@ -988,28 +1026,38 @@
                 resetRoomModal.classList.add('hidden');
                 resetRoomModal.classList.remove('flex');
 
-                roomCode = generateRoomCode();
-                eventTitle = DEFAULT_TITLE;
-                eventTitleInput.value = eventTitle;
-                participants = [];
+                clearTimeout(titleDebounceTimer);
+                titleDirty = false;
                 cancelEditingMode();
-                syncStateToUrlAndStorage();
-                showToast(`새 모임 방(${roomCode})이 생성되었습니다!`, 'success');
+                joinRoom(generateRoomCode());
+                eventTitleInput.value = DEFAULT_TITLE;
+                showToast(`새 모임 방(${roomCode})이 생성되었습니다! 공유 링크를 복사해 보내주세요.`, 'success');
             });
 
             // ==========================================
             // 7. 입력 및 등록 버튼 이벤트
             // ==========================================
             eventTitleInput.addEventListener('input', () => {
-                eventTitle = eventTitleInput.value.trim() || DEFAULT_TITLE;
+                titleDirty = true;
                 clearTimeout(titleDebounceTimer);
                 titleDebounceTimer = setTimeout(() => {
-                    syncStateToUrlAndStorage();
-                }, 300);
+                    const newTitle = (eventTitleInput.value.trim() || DEFAULT_TITLE).slice(0, 60);
+                    if (!roomRef) { titleDirty = false; return; }
+                    roomRef.child('title').set(newTitle)
+                        .catch(err => {
+                            console.error('제목 저장 실패:', err);
+                            showToast('제목을 저장하지 못했습니다. 인터넷 연결을 확인해주세요.', 'error');
+                        })
+                        .finally(() => { titleDirty = false; });
+                }, 500);
+            });
+
+            eventTitleInput.addEventListener('blur', () => {
+                if (!eventTitleInput.value.trim()) eventTitleInput.value = eventTitle;
             });
 
             btnSubmitVote.addEventListener('click', () => {
-                const name = participantNameInput.value.trim();
+                const name = participantNameInput.value.trim().slice(0, 20);
                 if (!name) {
                     showToast('이름(닉네임)을 입력해주세요!', 'error');
                     participantNameInput.focus();
@@ -1021,40 +1069,45 @@
                     return;
                 }
 
+                if (!requireConnection()) return;
+
                 const selectedArray = Array.from(mySelectedDates).sort((a, b) => a - b);
+                const wasEditing = Boolean(editingParticipantId);
 
-                if (editingParticipantId) {
-                    const idx = participants.findIndex(p => p.id === editingParticipantId);
-                    if (idx !== -1) {
-                        participants[idx] = {
-                            ...participants[idx],
-                            name: name,
-                            dates: selectedArray
-                        };
-                    }
-                    cancelEditingMode();
-                } else {
-                    const existingIdx = participants.findIndex(p => p.name === name);
-                    if (existingIdx !== -1) {
-                        participants[existingIdx] = {
-                            ...participants[existingIdx],
-                            dates: selectedArray
-                        };
-                    } else {
-                        participants.push({
-                            id: generateShortId(),
-                            name: name,
-                            dates: selectedArray
-                        });
-                    }
-                    participantNameInput.value = '';
-                    mySelectedDates.clear();
+                // 수정 중이면 그 사람, 아니면 같은 이름이 있으면 그 사람의 응답을 고치고, 없으면 새로 추가
+                let targetId = editingParticipantId;
+                if (!targetId) {
+                    const sameName = participants.find(p => p.name === name);
+                    targetId = sameName ? sameName.id : generateShortId();
                 }
+                const existing = participants.find(p => p.id === targetId);
 
-                syncStateToUrlAndStorage();
-                renderCalendar();
-                renderParticipantsList();
-                openShareLinkModal(`'${name}'님 일정 등록 완료! 새 공유 링크`);
+                const record = {
+                    name: name,
+                    dates: selectedArray,
+                    createdAt: existing && existing.createdAt ? existing.createdAt : Date.now(),
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                };
+
+                btnSubmitVote.disabled = true;
+                roomRef.child('participants/' + targetId).set(record)
+                    .then(() => {
+                        if (wasEditing) {
+                            cancelEditingMode();
+                        } else {
+                            participantNameInput.value = '';
+                            mySelectedDates.clear();
+                            renderCalendar();
+                        }
+                        showToast(`'${name}'님 일정이 저장되어 모두의 화면에 바로 반영됩니다.`, 'success');
+                    })
+                    .catch(err => {
+                        console.error('저장 실패:', err);
+                        showToast('저장하지 못했습니다. 인터넷 연결을 확인하고 다시 눌러주세요.', 'error');
+                    })
+                    .finally(() => {
+                        btnSubmitVote.disabled = false;
+                    });
             });
 
             btnCancelEdit.addEventListener('click', cancelEditingMode);
@@ -1063,19 +1116,26 @@
                 renderCalendar();
             });
 
-            // 브라우저 뒤로가기/앞으로가기 또는 해시 직접 변경 시 동기화
-            window.addEventListener('hashchange', () => {
-                loadInitialState();
-                renderCalendar();
-                renderParticipantsList();
-            });
-
             // ==========================================
             // 8. 앱 시작
             // ==========================================
-            loadInitialState();
-            renderCalendar();
-            renderParticipantsList();
+            initFirebase();
+
+            const legacy = parseLegacyHash();
+            let startCode = getRoomFromUrl();
+            if (!startCode && legacy && ROOM_CODE_RE.test(legacy.roomCode)) {
+                startCode = legacy.roomCode;
+            }
+            if (!startCode) {
+                try {
+                    const last = localStorage.getItem(LAST_ROOM_KEY);
+                    if (last && ROOM_CODE_RE.test(last)) startCode = last;
+                } catch (e) {}
+            }
+            if (!startCode) startCode = generateRoomCode();
+
+            joinRoom(startCode);
+            importLegacyIfRoomEmpty(legacy);
         })();
     </script>
 </body>
